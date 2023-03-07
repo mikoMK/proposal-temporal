@@ -3527,16 +3527,12 @@ export function BalancePossiblyInfiniteTimeDurationRelative(
   return { days, hours, minutes, seconds, milliseconds, microseconds, nanoseconds };
 }
 
-export function UnbalanceDateDurationRelative(years, months, weeks, days, largestUnit, relativeTo) {
+export function UnbalanceDateDurationRelative(years, months, weeks, days, largestUnit, plainRelativeTo) {
   const TemporalDuration = GetIntrinsic('%Temporal.Duration%');
   const sign = DurationSign(years, months, weeks, days, 0, 0, 0, 0, 0, 0);
   if (sign === 0) return { years, months, weeks, days };
 
-  let calendar;
-  if (relativeTo) {
-    relativeTo = ToTemporalDate(relativeTo);
-    calendar = GetSlot(relativeTo, CALENDAR);
-  }
+  const calendar = plainRelativeTo ? GetSlot(plainRelativeTo, CALENDAR) : undefined;
 
   const oneYear = new TemporalDuration(sign);
   const oneMonth = new TemporalDuration(0, sign);
@@ -3554,6 +3550,7 @@ export function UnbalanceDateDurationRelative(years, months, weeks, days, larges
       break;
     case 'month':
       {
+        if (years.isZero()) break;
         if (!calendar) throw new RangeError('a starting point is required for months balancing');
         // balance years down to months
         let dateAdd, dateUntil;
@@ -3562,12 +3559,12 @@ export function UnbalanceDateDurationRelative(years, months, weeks, days, larges
           dateUntil = GetMethod(calendar, 'dateUntil');
         }
         while (!years.isZero()) {
-          const newRelativeTo = CalendarDateAdd(calendar, relativeTo, oneYear, undefined, dateAdd);
+          const newRelativeTo = CalendarDateAdd(calendar, plainRelativeTo, oneYear, undefined, dateAdd);
           const untilOptions = ObjectCreate(null);
           untilOptions.largestUnit = 'month';
-          const untilResult = CalendarDateUntil(calendar, relativeTo, newRelativeTo, untilOptions, dateUntil);
+          const untilResult = CalendarDateUntil(calendar, plainRelativeTo, newRelativeTo, untilOptions, dateUntil);
           const oneYearMonths = GetSlot(untilResult, MONTHS);
-          relativeTo = newRelativeTo;
+          plainRelativeTo = newRelativeTo;
           months = months.add(oneYearMonths);
           years = years.subtract(sign);
         }
@@ -3575,12 +3572,18 @@ export function UnbalanceDateDurationRelative(years, months, weeks, days, larges
       break;
     case 'week':
       {
+        if (years.isZero() && months.isZero()) break;
         if (!calendar) throw new RangeError('a starting point is required for weeks balancing');
         const dateAdd = typeof calendar !== 'string' ? GetMethod(calendar, 'dateAdd') : undefined;
         // balance years down to days
         while (!years.isZero()) {
           let oneYearDays;
-          ({ relativeTo, days: oneYearDays } = MoveRelativeDate(calendar, relativeTo, oneYear, dateAdd));
+          ({ relativeTo: plainRelativeTo, days: oneYearDays } = MoveRelativeDate(
+            calendar,
+            plainRelativeTo,
+            oneYear,
+            dateAdd
+          ));
           days = days.add(oneYearDays);
           years = years.subtract(sign);
         }
@@ -3588,7 +3591,12 @@ export function UnbalanceDateDurationRelative(years, months, weeks, days, larges
         // balance months down to days
         while (!months.isZero()) {
           let oneMonthDays;
-          ({ relativeTo, days: oneMonthDays } = MoveRelativeDate(calendar, relativeTo, oneMonth, dateAdd));
+          ({ relativeTo: plainRelativeTo, days: oneMonthDays } = MoveRelativeDate(
+            calendar,
+            plainRelativeTo,
+            oneMonth,
+            dateAdd
+          ));
           days = days.add(oneMonthDays);
           months = months.subtract(sign);
         }
@@ -3602,7 +3610,12 @@ export function UnbalanceDateDurationRelative(years, months, weeks, days, larges
         // balance years down to days
         while (!years.isZero()) {
           let oneYearDays;
-          ({ relativeTo, days: oneYearDays } = MoveRelativeDate(calendar, relativeTo, oneYear, dateAdd));
+          ({ relativeTo: plainRelativeTo, days: oneYearDays } = MoveRelativeDate(
+            calendar,
+            plainRelativeTo,
+            oneYear,
+            dateAdd
+          ));
           days = days.add(oneYearDays);
           years = years.subtract(sign);
         }
@@ -3610,7 +3623,12 @@ export function UnbalanceDateDurationRelative(years, months, weeks, days, larges
         // balance months down to days
         while (!months.isZero()) {
           let oneMonthDays;
-          ({ relativeTo, days: oneMonthDays } = MoveRelativeDate(calendar, relativeTo, oneMonth, dateAdd));
+          ({ relativeTo: plainRelativeTo, days: oneMonthDays } = MoveRelativeDate(
+            calendar,
+            plainRelativeTo,
+            oneMonth,
+            dateAdd
+          ));
           days = days.add(oneMonthDays);
           months = months.subtract(sign);
         }
@@ -3618,7 +3636,12 @@ export function UnbalanceDateDurationRelative(years, months, weeks, days, larges
         // balance weeks down to days
         while (!weeks.isZero()) {
           let oneWeekDays;
-          ({ relativeTo, days: oneWeekDays } = MoveRelativeDate(calendar, relativeTo, oneWeek, dateAdd));
+          ({ relativeTo: plainRelativeTo, days: oneWeekDays } = MoveRelativeDate(
+            calendar,
+            plainRelativeTo,
+            oneWeek,
+            dateAdd
+          ));
           days = days.add(oneWeekDays);
           weeks = weeks.subtract(sign);
         }
@@ -3634,16 +3657,15 @@ export function UnbalanceDateDurationRelative(years, months, weeks, days, larges
   };
 }
 
-export function BalanceDateDurationRelative(years, months, weeks, days, largestUnit, relativeTo) {
+export function BalanceDateDurationRelative(years, months, weeks, days, largestUnit, plainRelativeTo) {
   const TemporalDuration = GetIntrinsic('%Temporal.Duration%');
   const sign = DurationSign(years, months, weeks, days, 0, 0, 0, 0, 0, 0);
-  if (sign === 0) return { years, months, weeks, days };
-
-  let calendar;
-  if (relativeTo) {
-    relativeTo = ToTemporalDate(relativeTo);
-    calendar = GetSlot(relativeTo, CALENDAR);
+  if (sign === 0 || (largestUnit !== 'year' && largestUnit !== 'month' && largestUnit !== 'week')) {
+    return { years, months, weeks, days };
   }
+
+  if (!plainRelativeTo) throw new RangeError(`a starting point is required for ${largestUnit}s balancing`);
+  const calendar = GetSlot(plainRelativeTo, CALENDAR);
 
   const oneYear = new TemporalDuration(sign);
   const oneMonth = new TemporalDuration(0, sign);
@@ -3657,72 +3679,109 @@ export function BalanceDateDurationRelative(years, months, weeks, days, largestU
 
   switch (largestUnit) {
     case 'year': {
-      if (!calendar) throw new RangeError('a starting point is required for years balancing');
       const dateAdd = typeof calendar !== 'string' ? GetMethod(calendar, 'dateAdd') : undefined;
       // balance days up to years
       let newRelativeTo, oneYearDays;
-      ({ relativeTo: newRelativeTo, days: oneYearDays } = MoveRelativeDate(calendar, relativeTo, oneYear, dateAdd));
+      ({ relativeTo: newRelativeTo, days: oneYearDays } = MoveRelativeDate(
+        calendar,
+        plainRelativeTo,
+        oneYear,
+        dateAdd
+      ));
       while (days.abs().geq(MathAbs(oneYearDays))) {
         days = days.subtract(oneYearDays);
         years = years.add(sign);
-        relativeTo = newRelativeTo;
-        ({ relativeTo: newRelativeTo, days: oneYearDays } = MoveRelativeDate(calendar, relativeTo, oneYear, dateAdd));
+        plainRelativeTo = newRelativeTo;
+        ({ relativeTo: newRelativeTo, days: oneYearDays } = MoveRelativeDate(
+          calendar,
+          plainRelativeTo,
+          oneYear,
+          dateAdd
+        ));
       }
 
       // balance days up to months
       let oneMonthDays;
-      ({ relativeTo: newRelativeTo, days: oneMonthDays } = MoveRelativeDate(calendar, relativeTo, oneMonth, dateAdd));
+      ({ relativeTo: newRelativeTo, days: oneMonthDays } = MoveRelativeDate(
+        calendar,
+        plainRelativeTo,
+        oneMonth,
+        dateAdd
+      ));
       while (days.abs().geq(MathAbs(oneMonthDays))) {
         days = days.subtract(oneMonthDays);
         months = months.add(sign);
-        relativeTo = newRelativeTo;
-        ({ relativeTo: newRelativeTo, days: oneMonthDays } = MoveRelativeDate(calendar, relativeTo, oneMonth, dateAdd));
+        plainRelativeTo = newRelativeTo;
+        ({ relativeTo: newRelativeTo, days: oneMonthDays } = MoveRelativeDate(
+          calendar,
+          plainRelativeTo,
+          oneMonth,
+          dateAdd
+        ));
       }
 
       // balance months up to years
-      newRelativeTo = CalendarDateAdd(calendar, relativeTo, oneYear, undefined, dateAdd);
+      newRelativeTo = CalendarDateAdd(calendar, plainRelativeTo, oneYear, undefined, dateAdd);
       const dateUntil = typeof calendar !== 'string' ? GetMethod(calendar, 'dateUntil') : undefined;
       const untilOptions = ObjectCreate(null);
       untilOptions.largestUnit = 'month';
-      let untilResult = CalendarDateUntil(calendar, relativeTo, newRelativeTo, untilOptions, dateUntil);
+      let untilResult = CalendarDateUntil(calendar, plainRelativeTo, newRelativeTo, untilOptions, dateUntil);
       let oneYearMonths = GetSlot(untilResult, MONTHS);
       while (months.abs().geq(MathAbs(oneYearMonths))) {
         months = months.subtract(oneYearMonths);
         years = years.add(sign);
-        relativeTo = newRelativeTo;
-        newRelativeTo = CalendarDateAdd(calendar, relativeTo, oneYear, undefined, dateAdd);
+        plainRelativeTo = newRelativeTo;
+        newRelativeTo = CalendarDateAdd(calendar, plainRelativeTo, oneYear, undefined, dateAdd);
         const untilOptions = ObjectCreate(null);
         untilOptions.largestUnit = 'month';
-        untilResult = CalendarDateUntil(calendar, relativeTo, newRelativeTo, untilOptions, dateUntil);
+        untilResult = CalendarDateUntil(calendar, plainRelativeTo, newRelativeTo, untilOptions, dateUntil);
         oneYearMonths = GetSlot(untilResult, MONTHS);
       }
       break;
     }
     case 'month': {
-      if (!calendar) throw new RangeError('a starting point is required for months balancing');
       const dateAdd = typeof calendar !== 'string' ? GetMethod(calendar, 'dateAdd') : undefined;
       // balance days up to months
       let newRelativeTo, oneMonthDays;
-      ({ relativeTo: newRelativeTo, days: oneMonthDays } = MoveRelativeDate(calendar, relativeTo, oneMonth, dateAdd));
+      ({ relativeTo: newRelativeTo, days: oneMonthDays } = MoveRelativeDate(
+        calendar,
+        plainRelativeTo,
+        oneMonth,
+        dateAdd
+      ));
       while (days.abs().geq(MathAbs(oneMonthDays))) {
         days = days.subtract(oneMonthDays);
         months = months.add(sign);
-        relativeTo = newRelativeTo;
-        ({ relativeTo: newRelativeTo, days: oneMonthDays } = MoveRelativeDate(calendar, relativeTo, oneMonth, dateAdd));
+        plainRelativeTo = newRelativeTo;
+        ({ relativeTo: newRelativeTo, days: oneMonthDays } = MoveRelativeDate(
+          calendar,
+          plainRelativeTo,
+          oneMonth,
+          dateAdd
+        ));
       }
       break;
     }
     case 'week': {
-      if (!calendar) throw new RangeError('a starting point is required for weeks balancing');
       const dateAdd = typeof calendar !== 'string' ? GetMethod(calendar, 'dateAdd') : undefined;
       // balance days up to weeks
       let newRelativeTo, oneWeekDays;
-      ({ relativeTo: newRelativeTo, days: oneWeekDays } = MoveRelativeDate(calendar, relativeTo, oneWeek, dateAdd));
+      ({ relativeTo: newRelativeTo, days: oneWeekDays } = MoveRelativeDate(
+        calendar,
+        plainRelativeTo,
+        oneWeek,
+        dateAdd
+      ));
       while (days.abs().geq(MathAbs(oneWeekDays))) {
         days = days.subtract(oneWeekDays);
         weeks = weeks.add(sign);
-        relativeTo = newRelativeTo;
-        ({ relativeTo: newRelativeTo, days: oneWeekDays } = MoveRelativeDate(calendar, relativeTo, oneWeek, dateAdd));
+        plainRelativeTo = newRelativeTo;
+        ({ relativeTo: newRelativeTo, days: oneWeekDays } = MoveRelativeDate(
+          calendar,
+          plainRelativeTo,
+          oneWeek,
+          dateAdd
+        ));
       }
       break;
     }
@@ -4511,6 +4570,9 @@ export function DifferenceTemporalZonedDateTime(operation, zonedDateTime, other,
       DifferenceZonedDateTime(ns1, ns2, timeZone, calendar, settings.largestUnit, resolvedOptions));
 
     if (settings.smallestUnit !== 'nanosecond' || settings.roundingIncrement !== 1) {
+      const plainRelativeToWillBeUsed =
+        settings.smallestUnit === 'year' || settings.smallestUnit === 'month' || settings.smallestUnit === 'week';
+      const plainRelativeTo = plainRelativeToWillBeUsed ? ToTemporalDate(zonedDateTime) : undefined;
       ({ years, months, weeks, days, hours, minutes, seconds, milliseconds, microseconds, nanoseconds } = RoundDuration(
         years,
         months,
@@ -4525,6 +4587,7 @@ export function DifferenceTemporalZonedDateTime(operation, zonedDateTime, other,
         settings.roundingIncrement,
         settings.smallestUnit,
         settings.roundingMode,
+        plainRelativeTo,
         zonedDateTime
       ));
       ({ years, months, weeks, days, hours, minutes, seconds, milliseconds, microseconds, nanoseconds } =
@@ -5248,10 +5311,9 @@ export function AdjustRoundedDurationDays(
   increment,
   unit,
   roundingMode,
-  relativeTo
+  zonedRelativeTo
 ) {
   if (
-    !IsTemporalZonedDateTime(relativeTo) ||
     unit === 'year' ||
     unit === 'month' ||
     unit === 'week' ||
@@ -5281,10 +5343,10 @@ export function AdjustRoundedDurationDays(
   );
   const direction = MathSign(timeRemainderNs.toJSNumber());
 
-  const timeZone = GetSlot(relativeTo, TIME_ZONE);
-  const calendar = GetSlot(relativeTo, CALENDAR);
+  const timeZone = GetSlot(zonedRelativeTo, TIME_ZONE);
+  const calendar = GetSlot(zonedRelativeTo, CALENDAR);
   const dayStart = AddZonedDateTime(
-    GetSlot(relativeTo, INSTANT),
+    GetSlot(zonedRelativeTo, INSTANT),
     timeZone,
     calendar,
     years,
@@ -5339,7 +5401,7 @@ export function AdjustRoundedDurationDays(
       0,
       0,
       0,
-      relativeTo
+      zonedRelativeTo
     ));
     ({ hours, minutes, seconds, milliseconds, microseconds, nanoseconds } = RoundDuration(
       years,
@@ -5384,11 +5446,12 @@ export function RoundDuration(
   increment,
   unit,
   roundingMode,
-  relativeTo = undefined
+  plainRelativeTo = undefined,
+  zonedRelativeTo = undefined
 ) {
   const TemporalDuration = GetIntrinsic('%Temporal.Duration%');
 
-  if ((unit === 'year' || unit === 'month' || unit === 'week') && !relativeTo) {
+  if ((unit === 'year' || unit === 'month' || unit === 'week') && !plainRelativeTo) {
     throw new RangeError(`A starting point is required for ${unit}s rounding`);
   }
 
@@ -5398,8 +5461,8 @@ export function RoundDuration(
   if (unit === 'year' || unit === 'month' || unit === 'week' || unit === 'day') {
     nanoseconds = TotalDurationNanoseconds(0, hours, minutes, seconds, milliseconds, microseconds, nanoseconds, 0);
     let deltaDays;
-    if (IsTemporalZonedDateTime(relativeTo)) {
-      const intermediate = MoveRelativeZonedDateTime(relativeTo, years, months, weeks, days);
+    if (zonedRelativeTo) {
+      const intermediate = MoveRelativeZonedDateTime(zonedRelativeTo, years, months, weeks, days);
       ({ days: deltaDays, nanoseconds, dayLengthNs } = NanosecondsToDays(nanoseconds, intermediate));
     } else {
       ({ quotient: deltaDays, remainder: nanoseconds } = nanoseconds.divmod(DAY_NANOS));
@@ -5413,32 +5476,36 @@ export function RoundDuration(
   let total;
   switch (unit) {
     case 'year': {
-      relativeTo = ToTemporalDate(relativeTo);
-      const calendar = GetSlot(relativeTo, CALENDAR);
+      const calendar = GetSlot(plainRelativeTo, CALENDAR);
 
       // convert months and weeks to days by calculating difference(
       // relativeTo + years, relativeTo + { years, months, weeks })
       const yearsDuration = new TemporalDuration(years);
       const dateAdd = typeof calendar !== 'string' ? GetMethod(calendar, 'dateAdd') : undefined;
-      const yearsLater = CalendarDateAdd(calendar, relativeTo, yearsDuration, undefined, dateAdd);
+      const yearsLater = CalendarDateAdd(calendar, plainRelativeTo, yearsDuration, undefined, dateAdd);
       const yearsMonthsWeeks = new TemporalDuration(years, months, weeks);
-      const yearsMonthsWeeksLater = CalendarDateAdd(calendar, relativeTo, yearsMonthsWeeks, undefined, dateAdd);
+      const yearsMonthsWeeksLater = CalendarDateAdd(calendar, plainRelativeTo, yearsMonthsWeeks, undefined, dateAdd);
       const monthsWeeksInDays = DaysUntil(yearsLater, yearsMonthsWeeksLater);
-      relativeTo = yearsLater;
+      plainRelativeTo = yearsLater;
       days += monthsWeeksInDays;
 
       const wholeDays = new TemporalDuration(0, 0, 0, days);
-      const wholeDaysLater = CalendarDateAdd(calendar, relativeTo, wholeDays, undefined, dateAdd);
+      const wholeDaysLater = CalendarDateAdd(calendar, plainRelativeTo, wholeDays, undefined, dateAdd);
       const untilOptions = ObjectCreate(null);
       untilOptions.largestUnit = 'year';
-      const yearsPassed = GetSlot(CalendarDateUntil(calendar, relativeTo, wholeDaysLater, untilOptions), YEARS);
+      const yearsPassed = GetSlot(CalendarDateUntil(calendar, plainRelativeTo, wholeDaysLater, untilOptions), YEARS);
       years += yearsPassed;
       const yearsPassedDuration = new TemporalDuration(yearsPassed);
       let daysPassed;
-      ({ relativeTo, days: daysPassed } = MoveRelativeDate(calendar, relativeTo, yearsPassedDuration, dateAdd));
+      ({ relativeTo: plainRelativeTo, days: daysPassed } = MoveRelativeDate(
+        calendar,
+        plainRelativeTo,
+        yearsPassedDuration,
+        dateAdd
+      ));
       days -= daysPassed;
       const oneYear = new TemporalDuration(days < 0 ? -1 : 1);
-      let { days: oneYearDays } = MoveRelativeDate(calendar, relativeTo, oneYear, dateAdd);
+      let { days: oneYearDays } = MoveRelativeDate(calendar, plainRelativeTo, oneYear, dateAdd);
 
       // Note that `nanoseconds` below (here and in similar code for months,
       // weeks, and days further below) isn't actually nanoseconds for the
@@ -5457,18 +5524,17 @@ export function RoundDuration(
       break;
     }
     case 'month': {
-      relativeTo = ToTemporalDate(relativeTo);
-      const calendar = GetSlot(relativeTo, CALENDAR);
+      const calendar = GetSlot(plainRelativeTo, CALENDAR);
 
       // convert weeks to days by calculating difference(relativeTo +
       //   { years, months }, relativeTo + { years, months, weeks })
       const yearsMonths = new TemporalDuration(years, months);
       const dateAdd = typeof calendar !== 'string' ? GetMethod(calendar, 'dateAdd') : undefined;
-      const yearsMonthsLater = CalendarDateAdd(calendar, relativeTo, yearsMonths, undefined, dateAdd);
+      const yearsMonthsLater = CalendarDateAdd(calendar, plainRelativeTo, yearsMonths, undefined, dateAdd);
       const yearsMonthsWeeks = new TemporalDuration(years, months, weeks);
-      const yearsMonthsWeeksLater = CalendarDateAdd(calendar, relativeTo, yearsMonthsWeeks, undefined, dateAdd);
+      const yearsMonthsWeeksLater = CalendarDateAdd(calendar, plainRelativeTo, yearsMonthsWeeks, undefined, dateAdd);
       const weeksInDays = DaysUntil(yearsMonthsLater, yearsMonthsWeeksLater);
-      relativeTo = yearsMonthsLater;
+      plainRelativeTo = yearsMonthsLater;
       days += weeksInDays;
 
       // Months may be different lengths of days depending on the calendar,
@@ -5476,11 +5542,21 @@ export function RoundDuration(
       const sign = MathSign(days);
       const oneMonth = new TemporalDuration(0, days < 0 ? -1 : 1);
       let oneMonthDays;
-      ({ relativeTo, days: oneMonthDays } = MoveRelativeDate(calendar, relativeTo, oneMonth, dateAdd));
+      ({ relativeTo: plainRelativeTo, days: oneMonthDays } = MoveRelativeDate(
+        calendar,
+        plainRelativeTo,
+        oneMonth,
+        dateAdd
+      ));
       while (MathAbs(days) >= MathAbs(oneMonthDays)) {
         months += sign;
         days -= oneMonthDays;
-        ({ relativeTo, days: oneMonthDays } = MoveRelativeDate(calendar, relativeTo, oneMonth, dateAdd));
+        ({ relativeTo: plainRelativeTo, days: oneMonthDays } = MoveRelativeDate(
+          calendar,
+          plainRelativeTo,
+          oneMonth,
+          dateAdd
+        ));
       }
       oneMonthDays = MathAbs(oneMonthDays);
       const divisor = bigInt(oneMonthDays).multiply(dayLengthNs);
@@ -5493,8 +5569,7 @@ export function RoundDuration(
       break;
     }
     case 'week': {
-      relativeTo = ToTemporalDate(relativeTo);
-      const calendar = GetSlot(relativeTo, CALENDAR);
+      const calendar = GetSlot(plainRelativeTo, CALENDAR);
 
       // Weeks may be different lengths of days depending on the calendar,
       // convert days to weeks in a loop as described above under 'years'.
@@ -5502,11 +5577,21 @@ export function RoundDuration(
       const oneWeek = new TemporalDuration(0, 0, days < 0 ? -1 : 1);
       const dateAdd = typeof calendar !== 'string' ? GetMethod(calendar, 'dateAdd') : undefined;
       let oneWeekDays;
-      ({ relativeTo, days: oneWeekDays } = MoveRelativeDate(calendar, relativeTo, oneWeek, dateAdd));
+      ({ relativeTo: plainRelativeTo, days: oneWeekDays } = MoveRelativeDate(
+        calendar,
+        plainRelativeTo,
+        oneWeek,
+        dateAdd
+      ));
       while (MathAbs(days) >= MathAbs(oneWeekDays)) {
         weeks += sign;
         days -= oneWeekDays;
-        ({ relativeTo, days: oneWeekDays } = MoveRelativeDate(calendar, relativeTo, oneWeek, dateAdd));
+        ({ relativeTo: plainRelativeTo, days: oneWeekDays } = MoveRelativeDate(
+          calendar,
+          plainRelativeTo,
+          oneWeek,
+          dateAdd
+        ));
       }
       oneWeekDays = MathAbs(oneWeekDays);
       const divisor = bigInt(oneWeekDays).multiply(dayLengthNs);
