@@ -571,22 +571,57 @@ export class Duration {
     }
     const { precision, unit, increment } = ES.ToSecondsStringPrecisionRecord(smallestUnit, digits);
 
-    let { years, months, weeks, days, hours, minutes, seconds, milliseconds, microseconds, nanoseconds } =
-      ES.RoundDuration(
-        GetSlot(this, YEARS),
-        GetSlot(this, MONTHS),
-        GetSlot(this, WEEKS),
-        GetSlot(this, DAYS),
-        GetSlot(this, HOURS),
-        GetSlot(this, MINUTES),
-        GetSlot(this, SECONDS),
-        GetSlot(this, MILLISECONDS),
-        GetSlot(this, MICROSECONDS),
-        GetSlot(this, NANOSECONDS),
-        increment,
-        unit,
-        roundingMode
+    let years = GetSlot(this, YEARS);
+    let months = GetSlot(this, MONTHS);
+    let weeks = GetSlot(this, WEEKS);
+    let days = GetSlot(this, DAYS);
+    let hours = GetSlot(this, HOURS);
+    let minutes = GetSlot(this, MINUTES);
+    let seconds = GetSlot(this, SECONDS);
+    let milliseconds = GetSlot(this, MILLISECONDS);
+    let microseconds = GetSlot(this, MICROSECONDS);
+    let nanoseconds = GetSlot(this, NANOSECONDS);
+
+    if (unit !== 'nanosecond' || increment !== 1) {
+      const largestUnit = ES.DefaultTemporalLargestUnit(
+        years,
+        months,
+        weeks,
+        days,
+        hours,
+        minutes,
+        seconds,
+        milliseconds,
+        microseconds,
+        nanoseconds
       );
+      ({ years, months, weeks, days, hours, minutes, seconds, milliseconds, microseconds, nanoseconds } =
+        ES.RoundDuration(
+          years,
+          months,
+          weeks,
+          days,
+          hours,
+          minutes,
+          seconds,
+          milliseconds,
+          microseconds,
+          nanoseconds,
+          increment,
+          unit,
+          roundingMode
+        ));
+      ({ days, hours, minutes, seconds, milliseconds, microseconds, nanoseconds } = ES.BalanceTimeDuration(
+        days,
+        hours,
+        minutes,
+        seconds,
+        milliseconds,
+        microseconds,
+        nanoseconds,
+        largestUnit
+      ));
+    }
     return ES.TemporalDurationToString(
       years,
       months,

@@ -4231,7 +4231,14 @@ export function DifferenceTemporalPlainDate(operation, plainDate, other, options
   }
 
   const calendarRec = new MethodRecord(calendar);
-  if (settings.smallestUnit === 'year' || settings.smallestUnit === 'month' || settings.smallestUnit === 'week') {
+  const roundingRequested = settings.smallestUnit !== 'day' || settings.roundingIncrement !== 1;
+  if (
+    settings.smallestUnit === 'year' ||
+    settings.smallestUnit === 'month' ||
+    settings.smallestUnit === 'week' ||
+    (roundingRequested &&
+      (settings.largestUnit === 'year' || settings.largestUnit === 'month' || settings.largestUnit === 'week'))
+  ) {
     calendarRec.lookup('dateAdd');
   }
   if (
@@ -4249,7 +4256,7 @@ export function DifferenceTemporalPlainDate(operation, plainDate, other, options
   let weeks = GetSlot(untilResult, WEEKS);
   let days = GetSlot(untilResult, DAYS);
 
-  if (settings.smallestUnit !== 'day' || settings.roundingIncrement !== 1) {
+  if (roundingRequested) {
     ({ years, months, weeks, days } = RoundDuration(
       years,
       months,
@@ -4264,6 +4271,15 @@ export function DifferenceTemporalPlainDate(operation, plainDate, other, options
       settings.roundingIncrement,
       settings.smallestUnit,
       settings.roundingMode,
+      plainDate,
+      calendarRec
+    ));
+    ({ years, months, weeks, days } = BalanceDateDurationRelative(
+      years,
+      months,
+      weeks,
+      days,
+      settings.largestUnit,
       plainDate,
       calendarRec
     ));
@@ -4300,7 +4316,15 @@ export function DifferenceTemporalPlainDateTime(operation, plainDateTime, other,
   }
 
   const calendarRec = new MethodRecord(calendar);
-  if (settings.smallestUnit === 'year' || settings.smallestUnit === 'month' || settings.smallestUnit === 'week') {
+  const roundingRequested = settings.smallestUnit !== 'nanosecond' || settings.roundingIncrement !== 1;
+  if (
+    settings.smallestUnit === 'year' ||
+    settings.smallestUnit === 'month' ||
+    settings.smallestUnit === 'week' ||
+    (!datePartsIdentical &&
+      roundingRequested &&
+      (settings.largestUnit === 'year' || settings.largestUnit === 'month' || settings.largestUnit === 'week'))
+  ) {
     calendarRec.lookup('dateAdd');
   }
   if (
@@ -4337,7 +4361,7 @@ export function DifferenceTemporalPlainDateTime(operation, plainDateTime, other,
       calendarRec
     );
 
-  if (settings.smallestUnit !== 'nanosecond' || settings.roundingIncrement !== 1) {
+  if (roundingRequested) {
     const relativeTo = TemporalDateTimeToDate(plainDateTime);
     ({ years, months, weeks, days, hours, minutes, seconds, milliseconds, microseconds, nanoseconds } = RoundDuration(
       years,
@@ -4365,6 +4389,15 @@ export function DifferenceTemporalPlainDateTime(operation, plainDateTime, other,
       microseconds,
       nanoseconds,
       settings.largestUnit
+    ));
+    ({ years, months, weeks, days } = BalanceDateDurationRelative(
+      years,
+      months,
+      weeks,
+      days,
+      settings.largestUnit,
+      relativeTo,
+      calendarRec
     ));
   }
 
@@ -4506,6 +4539,7 @@ export function DifferenceTemporalPlainYearMonth(operation, yearMonth, other, op
       thisDate,
       calendarRec
     ));
+    ({ years, months } = BalanceDateDurationRelative(years, months, 0, 0, settings.largestUnit, thisDate, calendarRec));
   }
 
   return new Duration(sign * years, sign * months, 0, 0, 0, 0, 0, 0, 0, 0);
@@ -4565,7 +4599,11 @@ export function DifferenceTemporalZonedDateTime(operation, zonedDateTime, other,
 
     if (settings.smallestUnit !== 'nanosecond' || settings.roundingIncrement !== 1) {
       const plainRelativeToWillBeUsed =
-        settings.smallestUnit === 'year' || settings.smallestUnit === 'month' || settings.smallestUnit === 'week';
+        settings.smallestUnit === 'year' ||
+        settings.smallestUnit === 'month' ||
+        settings.smallestUnit === 'week' ||
+        ((years !== 0 || months !== 0 || weeks !== 0 || days !== 0) &&
+          (settings.largestUnit === 'year' || settings.largestUnit === 'month' || settings.largestUnit === 'week'));
       let plainRelativeTo;
       if (plainRelativeToWillBeUsed) {
         const dt = GetPlainDateTimeFor(timeZoneRec, GetSlot(zonedDateTime, INSTANT), GetSlot(zonedDateTime, CALENDAR));
@@ -4609,6 +4647,16 @@ export function DifferenceTemporalZonedDateTime(operation, zonedDateTime, other,
           calendarRec,
           timeZoneRec
         ));
+      // BalanceTimeDuration already performed in AdjustRoundedDurationDays
+      ({ years, months, weeks, days } = BalanceDateDurationRelative(
+        years,
+        months,
+        weeks,
+        days,
+        settings.largestUnit,
+        plainRelativeTo,
+        calendarRec
+      ));
     }
   }
 
